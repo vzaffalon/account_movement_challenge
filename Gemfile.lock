@@ -1,0 +1,14 @@
+GEM
+  specs:
+    csv (1.0.0)
+    redis (4.1.3)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  csv (~> 1.0)
+  redis (~> 4.1)
+
+BUNDLED WITH
+   1.17.3
