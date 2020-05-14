@@ -26,7 +26,7 @@ end
 def create_redis_instance
   puts
   puts 'Instanciando redis..'
-  @redis = Redis.new(host: '127.0.0.1', port: 6380)
+  @redis = Redis.new(host: '127.0.0.1', port: 6380) #host e porta do redis no docker
   @redis.flushall
 end
 
@@ -46,8 +46,8 @@ def parse_csvs
   puts 'Fazendo o parse dos arquivos csv..'
   begin
     # puts "accounts_csv" + accounts_csv
-    @parsed_accounts_csv = CSV.parse(@accounts_csv, headers: false)
-    @parsed_transactions_csv = CSV.parse(@transactions_csv, headers: false)
+    @parsed_accounts_csv = CSV.parse(@accounts_csv, headers: false, skip_blanks: true)
+    @parsed_transactions_csv = CSV.parse(@transactions_csv, headers: false, skip_blanks: true)
   rescue StandardError => e
     raise StandardError.new('-- Error: Não conseguiu fazer o parse dos arquivos csv!')
   end
@@ -59,10 +59,10 @@ def create_accounts
   @parsed_accounts_csv.each do |row|
     account_id = row[0]
     amount = row[1]
-    if account_id.is_number? && amount && amount.is_number?
+    if account_id && account_id.is_number? && amount && amount.is_number?
       account_exists = @redis.get(account_id)
       if !account_exists
-        @redis.set(account_id, amount)
+        @redis.set(account_id, amount.to_i)
       else
         raise StandardError.new("-- Error: Csv mal formatado! Conta (#{account_id}) duplicada!")
       end
@@ -76,24 +76,24 @@ def create_transactions
   puts
   puts 'Criando transações..'
   @parsed_transactions_csv.each do |row|
-    account_id = row[0]
-    amount = row[1]
-    if account_id.is_number? && amount && amount.is_number?
-      account_exists = @redis.get(account_id)
-      if account_exists
-        @redis.set(account_id, amount)
+      account_id = row[0]
+      amount = row[1]
+      if account_id && account_id.is_number? && amount && amount.is_number?
+        account_amount = @redis.get(account_id)
+        if account_amount
+          amount = amount.to_i
+          current_amount = @redis.get(account_id).to_i
+          current_amount += amount
+          current_amount -= 300 if (current_amount < 0) && (amount < 0)
+          @redis.set(account_id, current_amount.to_s)
+        else
+        raise StandardError.new("-- Error: Csv mal formatado! Conta (#{account_id}) não existente!")
+        end
       else
-       raise StandardError.new("-- Error: Csv mal formatado! Conta (#{account_id}) não existente!")
+        raise StandardError.new('-- Error: Csv mal formatado! Colunas devem ser números inteiros!')
       end
-    else
-      raise StandardError.new('-- Error: Csv mal formatado! Colunas devem ser números inteiros!')
+      
     end
-    amount = amount.to_i
-    current_amount = @redis.get(account_id).to_i
-    current_amount += amount
-    current_amount -= 300 if (current_amount < 0) && (amount > 0)
-    @redis.set(account_id, current_amount.to_s)
-  end
 end
 
 def output_result
@@ -101,8 +101,8 @@ def output_result
   puts 'Resultado das transações:'
   puts
   @redis.keys.each do |key, _value|
-    puts 'id da conta:' + key
-    puts 'saldo final:' + @redis.get(key)
+    puts 'Id da conta: ' + key
+    puts 'Saldo final: R$ %.2f' % (@redis.get(key).to_f/100.0)
     puts
   end
 end
