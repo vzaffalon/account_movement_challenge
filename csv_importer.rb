@@ -19,14 +19,14 @@ end
 
 def receive_args
   if ARGV[0].nil? || ARGV[1].nil?
-    raise StandardError.new('-- Error: Você precisa passar dois arquivos como parametro, o primeiro parâmetro deve ser um arquivo de contas e o segundo de transações')
+    raise StandardError, '-- Error: Você precisa passar dois arquivos como parametro, o primeiro parâmetro deve ser um arquivo de contas e o segundo de transações'
   end
 end
 
 def create_redis_instance
   puts
   puts 'Instanciando redis..'
-  @redis = Redis.new(host: '127.0.0.1', port: 6380) #host e porta do redis no docker
+  @redis = Redis.new(host: '127.0.0.1', port: 6380) # host e porta do redis no docker
   @redis.flushall
 end
 
@@ -37,7 +37,7 @@ def open_csv_files
     @accounts_csv = File.read(ARGV[0])
     @transactions_csv = File.read(ARGV[1])
   rescue StandardError => e
-    raise StandardError.new('-- Error: Programa não conseguiu ler os arquivos!')
+    raise StandardError, '-- Error: Programa não conseguiu ler os arquivos!'
   end
 end
 
@@ -45,11 +45,10 @@ def parse_csvs
   puts
   puts 'Fazendo o parse dos arquivos csv..'
   begin
-    # puts "accounts_csv" + accounts_csv
     @parsed_accounts_csv = CSV.parse(@accounts_csv, headers: false, skip_blanks: true)
     @parsed_transactions_csv = CSV.parse(@transactions_csv, headers: false, skip_blanks: true)
   rescue StandardError => e
-    raise StandardError.new('-- Error: Não conseguiu fazer o parse dos arquivos csv!')
+    raise StandardError, '-- Error: Não conseguiu fazer o parse dos arquivos csv!'
   end
 end
 
@@ -59,15 +58,15 @@ def create_accounts
   @parsed_accounts_csv.each do |row|
     account_id = row[0]
     amount = row[1]
-    if account_id && account_id.is_number? && amount && amount.is_number?
+    if account_id&.is_number? && amount && amount.is_number?
       account_exists = @redis.get(account_id)
       if !account_exists
         @redis.set(account_id, amount.to_i)
       else
-        raise StandardError.new("-- Error: Csv mal formatado! Conta (#{account_id}) duplicada!")
+        raise StandardError, "-- Error: Csv mal formatado! Conta (#{account_id}) duplicada!"
       end
     else
-      raise StandardError.new('-- Error: Csv mal formatado! Colunas devem ser números inteiros!')
+      raise StandardError, '-- Error: Csv mal formatado! Colunas devem ser números inteiros!'
     end
   end
 end
@@ -76,24 +75,23 @@ def create_transactions
   puts
   puts 'Criando transações..'
   @parsed_transactions_csv.each do |row|
-      account_id = row[0]
-      amount = row[1]
-      if account_id && account_id.is_number? && amount && amount.is_number?
-        account_amount = @redis.get(account_id)
-        if account_amount
-          amount = amount.to_i
-          current_amount = @redis.get(account_id).to_i
-          current_amount += amount
-          current_amount -= 300 if (current_amount < 0) && (amount < 0)
-          @redis.set(account_id, current_amount.to_s)
-        else
-        raise StandardError.new("-- Error: Csv mal formatado! Conta (#{account_id}) não existente!")
-        end
+    account_id = row[0]
+    amount = row[1]
+    if account_id&.is_number? && amount && amount.is_number?
+      account_amount = @redis.get(account_id)
+      if account_amount
+        amount = amount.to_i
+        current_amount = @redis.get(account_id).to_i
+        current_amount += amount
+        current_amount -= 300 if (current_amount < 0) && (amount < 0)
+        @redis.set(account_id, current_amount.to_s)
       else
-        raise StandardError.new('-- Error: Csv mal formatado! Colunas devem ser números inteiros!')
+        raise StandardError, "-- Error: Csv mal formatado! Conta (#{account_id}) não existente!"
       end
-      
+    else
+      raise StandardError, '-- Error: Csv mal formatado! Colunas devem ser números inteiros!'
     end
+  end
 end
 
 def output_result
@@ -102,7 +100,7 @@ def output_result
   puts
   @redis.keys.each do |key, _value|
     puts 'Id da conta: ' + key
-    puts 'Saldo final: R$ %.2f' % (@redis.get(key).to_f/100.0)
+    puts format('Saldo final: R$ %.2f', (@redis.get(key).to_f / 100.0))
     puts
   end
 end
